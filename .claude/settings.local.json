@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s \"c:\\Users\\user\\Desktop\\Matlab_ws\\GP-MPC\")",
+      "Read(//c/Users/user/Desktop/Matlab_ws/**)",
+      "Bash(if not exist \"c:\\Users\\user\\Desktop\\Matlab_ws\\GP-MPC\\utils\" mkdir \"c:\\Users\\user\\Desktop\\Matlab_ws\\GP-MPC\\utils\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
