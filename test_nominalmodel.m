@@ -7,11 +7,11 @@
 clear all; close all; clc;
 
 % Add paths
-addpath(fullfile(pwd, 'classes'))
+addpath(fullfile(pwd, 'Gaussian-Process-based-Model-Predictive-Control', 'classes'))
 addpath(fullfile(pwd, 'functions'))
 
 fprintf('\n========================================\n');
-fprintf('3-State Vehicle Dynamics NMPC Test\n');
+fprintf('4-State Vehicle Dynamics NMPC Test\n');
 fprintf('========================================\n\n');
 
 %% Simulation Parameters
@@ -22,9 +22,13 @@ maxiter = 20;       % max iterations per MPC solve
 
 %% Reference Circular Path
 % Simple circular motion: constant yaw rate for circular path
-radius = 50;        % [m] circle radius
-v_ref = 8;         % [m/s] target velocity
+radius = 80;        % [m] circle radius
+v_ref = 20;         % [m/s] target velocity
 r_ref = v_ref / radius;  % [rad/s] yaw rate for circular path
+
+t_sim_vec = 0:dt:tf;
+
+psi_ref_vec = r_ref * t_sim_vec;
 
 fprintf('Reference path: Circular\n');
 fprintf('  Radius: %.1f m\n', radius);
@@ -46,16 +50,16 @@ fprintf('  Inputs: m = %d (delta)\n\n', m);
 %% Cost Function Weights
 weights.q_vx = 1;      % longitudinal velocity tracking
 weights.q_vy = 5;       % minimize lateral velocity (stability)
-weights.q_r = 1000;       % yaw rate tracking (path following)
-weights.q_delta = 1;    % steering effort
+weights.q_psi = 30;      % heading angle tracking
+weights.q_r = 50;       % yaw rate tracking (path following)
+weights.q_delta = 0.1;    % steering effort
 
 %% NMPC Setup
 ne = 0;  % no extra variables
 
 % Cost function
-fo = @(t,mu_x,var_x,u,e,r) costFcn(mu_x, u, v_ref, r_ref, weights);
-fend = @(t,mu_x,var_x,e,r) 2 * costFcn(mu_x, zeros(m,1), v_ref, r_ref, weights);
-
+fo = @(t,mu_x,var_x,u,e,r) costFcn(mu_x, u, v_ref, r_ref, t, weights);
+fend = @(t,mu_x,var_x,e,r) 2 * costFcn(mu_x, zeros(m,1), v_ref, r_ref, t, weights);
 % Dynamics
 f = @(mu_x,var_x,u) nominalModel.xkp1(mu_x, var_x, u, dt);
 
@@ -129,37 +133,46 @@ fprintf('========================================\n\n');
 k_valid = find(~isnan(out.x(1,:)), 1, 'last');
 
 % Calculate tracking errors
+% CORRECT state order: x = [vx, vy, psi, r]
 vx_error = rms(out.x(1,1:k_valid-1) - v_ref);
-r_error = rms(out.x(3,1:k_valid-1) - r_ref);
+psi_error = rms(out.x(3,1:k_valid-1) - psi_ref_vec(1:k_valid-1));  % psi is x(3)
+r_error = rms(out.x(4,1:k_valid-1) - r_ref);                        % r is x(4)
 max_beta = max(abs(rad2deg(out.beta)));
 
 fprintf('Performance Metrics:\n');
 fprintf('  Velocity RMS error: %.3f m/s\n', vx_error);
+fprintf('  Heading RMS error: %.4f rad (%.2f deg)\n', psi_error, rad2deg(psi_error));
 fprintf('  Yaw rate RMS error: %.4f rad/s\n', r_error);
 fprintf('  Max sideslip: %.2f deg\n\n', max_beta);
 
 %% Visualization
-figure('Name', 'NMPC Test Results', 'Color', 'w', 'Position', [100 100 1200 800]);
+figure('Name', 'NMPC Test Results', 'Color', 'w', 'Position', [100 100 1400 900]);
 
 % States
-subplot(3,2,1)
+subplot(4,2,1)
 plot(out.t(1:k_valid), out.x(1,1:k_valid), 'b-', 'LineWidth', 1.5); hold on;
 plot(out.t(1:k_valid), v_ref*ones(1,k_valid), 'r--', 'LineWidth', 1);
 grid on; ylabel('V_{vx} [m/s]'); title('Longitudinal Velocity');
-legend('Actual', 'Reference');
+legend('Actual', 'Reference', 'Location', 'best');
 
-subplot(3,2,3)
+subplot(4,2,3)
 plot(out.t(1:k_valid), out.x(2,1:k_valid), 'b-', 'LineWidth', 1.5);
 grid on; ylabel('V_{vy} [m/s]'); title('Lateral Velocity');
 
-subplot(3,2,5)
+subplot(4,2,5)
 plot(out.t(1:k_valid), rad2deg(out.x(3,1:k_valid)), 'b-', 'LineWidth', 1.5); hold on;
+plot(out.t(1:k_valid), rad2deg(psi_ref_vec(1:k_valid)), 'r--', 'LineWidth', 1);
+grid on; ylabel('\psi [deg]'); title('Heading Angle');
+legend('Actual', 'Reference', 'Location', 'best');
+
+subplot(4,2,7)
+plot(out.t(1:k_valid), rad2deg(out.x(4,1:k_valid)), 'b-', 'LineWidth', 1.5); hold on;
 plot(out.t(1:k_valid), rad2deg(r_ref)*ones(1,k_valid), 'r--', 'LineWidth', 1);
 grid on; ylabel('r [deg/s]'); xlabel('Time [s]'); title('Yaw Rate');
-legend('Actual', 'Reference');
+legend('Actual', 'Reference', 'Location', 'best');
 
 % Input (only steering)
-subplot(3,2,2)
+subplot(4,2,2)
 stairs(out.t(1:kmax), rad2deg(out.u), 'b-', 'LineWidth', 1.5); hold on;
 yline(rad2deg(u_ub), 'r--', 'LineWidth', 1);
 yline(rad2deg(u_lb), 'r--', 'LineWidth', 1);
@@ -167,34 +180,46 @@ grid on; ylabel('\delta [deg]'); title('Steering Angle');
 legend('Command', 'Bounds', 'Location', 'best');
 
 % Tracking errors
-subplot(3,2,4)
+subplot(4,2,4)
 plot(out.t(1:k_valid-1), out.x(1,1:k_valid-1) - v_ref, 'b-', 'LineWidth', 1.5); hold on;
-plot(out.t(1:k_valid-1), rad2deg(out.x(3,1:k_valid-1) - r_ref), 'r-', 'LineWidth', 1.5);
-grid on; ylabel('Error'); title('Tracking Errors');
+plot(out.t(1:k_valid-1), rad2deg(out.x(4,1:k_valid-1) - r_ref), 'r-', 'LineWidth', 1.5);
+grid on; ylabel('Error'); title('Velocity & Yaw Rate Errors');
 legend('v_x error [m/s]', 'r error [deg/s]', 'Location', 'best');
 
+% Heading tracking error
+subplot(4,2,6)
+plot(out.t(1:k_valid-1), rad2deg(out.x(3,1:k_valid-1) - psi_ref_vec(1:k_valid-1)), 'b-', 'LineWidth', 1.5);
+grid on; ylabel('\psi error [deg]'); title('Heading Tracking Error');
+legend('Error', 'Location', 'best');
+
 % Sideslip
-subplot(3,2,6)
+subplot(4,2,8)
 plot(out.t(1:kmax), rad2deg(out.beta), 'b-', 'LineWidth', 1.5); hold on;
 yline(rad2deg(beta_max), 'r--'); yline(-rad2deg(beta_max), 'r--');
 grid on; ylabel('\beta [deg]'); xlabel('Time [s]'); title('Sideslip Angle');
+legend('Sideslip', 'Bounds', 'Location', 'best');
 
-sgtitle('3-State NMPC Test: Circular Path Tracking');
+sgtitle('4-State NMPC Test: Circular Path Tracking (with Heading Angle)');
 
 fprintf('Plots generated\n\n');
 
 %% Helper Functions
 
-function cost = costFcn(x, u, v_ref, r_ref, w)
+function cost = costFcn(x, u, v_ref, r_ref, t, w)
 % Cost function for bicycle model (1 input: delta)
+% CRITICAL: State order is x = [vx; vy; psi; r]
 vx = x(1);
 vy = x(2);
-psi = x(3);
-r = x(4);
+psi = x(3);  % Heading angle
+r = x(4);    % Yaw rate
 delta = u(1);
 
+psi_ref_k = r_ref * t;
+
+% Full cost function - ALL TERMS NEEDED for proper tracking
 cost = w.q_vx * (vx - v_ref)^2 + ...
     w.q_vy * vy^2 + ...
+    w.q_psi * (psi - psi_ref_k)^2 + ...
     w.q_r * (r - r_ref)^2 + ...
     w.q_delta * delta^2;
 end
