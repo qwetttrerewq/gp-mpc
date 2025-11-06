@@ -2,7 +2,7 @@
 % GP-MPC for Vehicle Cornering Performance
 %
 % Simplified cornering scenario demonstrating GP-augmented MPC
-% State:  x = [vx; vy; r]  (3D)
+% State:  x = [vx; vy; psi; r]  (4D)
 % Input:  u = [delta]      (1D)
 % GP in:  z = [vx; vy; r; delta]  (4D)
 % GP out: d = [Δvy_dot; Δr_dot]  (2D)
@@ -24,14 +24,14 @@ addpath(fullfile(pwd, 'Gaussian-Process-based-Model-Predictive-Control', 'CODEGE
 %  ========================================================================
 
 dt = 0.1;          % timestep [s] (finer control)
-tf = 15;            % simulation time [s]
-N = 12;             % MPC prediction horizon (longer lookahead)
-maxiter = 30;       % max iterations per MPC solve (more iterations for convergence)
+tf = 10;            % simulation time [s]
+N = 10;             % MPC prediction horizon (longer lookahead)
+maxiter = 20;       % max iterations per MPC solve (more iterations for convergence)
 
 % GP configuration
 loadPreTrainedGP = false;
-useGP = true;               % use GP in MPC prediction
-trainGPonline = true;       % update GP during simulation
+useGP = false;               % use GP in MPC prediction
+trainGPonline = false;       % update GP during simulation
 
 % Display info
 lookahead = dt * N;
@@ -54,7 +54,7 @@ path_type = 'circular';
 
 switch path_type
     case 'circular'
-        refPath = CircularPath.createCircular(40, 16);  % R=40m, v=16m/s (balanced: ~0.65g lateral)
+        refPath = CircularPath.createCircular(30, 12);  % R=40m, v=16m/s (balanced: ~0.65g lateral)
     case 'figure8'
         refPath = CircularPath.createFigure8(40, 12);   % R=40m, v=12m/s
     case 'constant'
@@ -115,7 +115,7 @@ estModel = MotionModelGP_Bicycle_nominal(@d_GP.eval, var_w);
 %  CREATE NMPC CONTROLLER
 %  ========================================================================
 
-n = estModel.n;  % 3 states
+n = estModel.n;  % 4 states [vx; vy; psi; r]
 m = estModel.m;  % 1 input
 ne = 0;          % no extra variables
 
@@ -167,8 +167,8 @@ fprintf('========================================\n\n');
 %  INITIALIZE SIMULATION
 %  ========================================================================
 
-% Initial state [vx; vy; r]
-x0 = [refPath.v_ref; 0; 0];  % start at reference velocity, zero slip
+% Initial state [vx; vy; psi; r]
+x0 = [refPath.v_ref; 0; 0; 0];  % start at reference velocity, zero slip, zero yaw
 
 % Time vector
 out.t = 0:dt:tf;
@@ -199,7 +199,7 @@ out.z_train = NaN(4, kmax);             % GP input data
 d_GP.isActive = useGP;
 
 fprintf('Simulation initialized\n');
-fprintf('  Initial state: vx=%.1f m/s, vy=%.1f m/s, r=%.3f rad/s\n', x0(1), x0(2), x0(3));
+fprintf('  Initial state: vx=%.1f m/s, vy=%.1f m/s, psi=%.3f rad, r=%.3f rad/s\n', x0(1), x0(2), x0(3), x0(4));
 fprintf('  Starting simulation...\n\n');
 
 
@@ -343,15 +343,24 @@ ylabel('v_y [m/s]');
 title('Lateral Velocity');
 
 subplot(3,1,3)
-plot(out.t(1:k_valid), rad2deg(out.x(3,1:k_valid)), 'b-', 'LineWidth', 1.5); hold on;
+plot(out.t(1:k_valid), rad2deg(out.x(3,1:k_valid)), 'b-', 'LineWidth', 1.5);
+grid on;
+ylabel('\psi [deg]');
+title('Yaw Angle');
+
+sgtitle('Vehicle State Trajectories');
+
+% ---------------------------------------------------------------------
+% Figure 1b: Yaw Rate
+% ---------------------------------------------------------------------
+figure('Name', 'Yaw Rate Tracking', 'Color', 'w', 'Position', [120 120 800 400]);
+plot(out.t(1:k_valid), rad2deg(out.x(4,1:k_valid)), 'b-', 'LineWidth', 1.5); hold on;
 plot(out.t(1:k_valid_ref), rad2deg(out.r_ref(1:k_valid_ref)), 'r--', 'LineWidth', 1);
 grid on;
 ylabel('r [deg/s]');
 xlabel('Time [s]');
-title('Yaw Rate');
+title('Yaw Rate Tracking');
 legend('Actual', 'Reference', 'Location', 'best');
-
-sgtitle('Vehicle State Trajectories');
 
 % ---------------------------------------------------------------------
 % Figure 2: Control input and sideslip
@@ -455,6 +464,14 @@ fprintf('========================================\n\n');
 
 
 %% ========================================================================
+%  RUN DIAGNOSTIC ANALYSIS
+%  ========================================================================
+
+fprintf('Running diagnostic analysis...\n\n');
+diagnose_GP_MPC(out, d_GP, trueModel, nomModel, estModel, refPath, beta_max);
+
+
+%% ========================================================================
 %  COST FUNCTION
 %  ========================================================================
 
@@ -462,7 +479,8 @@ function cost = costFunction(t, mu_x, var_x, u, refPath, w)
 % Extract states
 vx = mu_x(1);
 vy = mu_x(2);
-r = mu_x(3);
+psi = mu_x(3);
+r = mu_x(4);
 
 % Extract input
 delta = u(1);
