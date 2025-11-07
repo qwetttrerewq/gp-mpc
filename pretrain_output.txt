@@ -1,0 +1,116 @@
+executing gpml startup script...
+[Warning: Name is nonexistent or not a directory: C:\Users\user\Desktop\Matlab_ws\personal_regen\regen-braking-mpc\gpml\util\minfunc\compiled] 
+[> In path (line 109)
+In addpath>doPathAddition (line 126)
+In addpath (line 90)
+In startup (line 11)] 
+
+========================================
+GP Pre-training for Bicycle Dynamics
+(IMPROVED VERSION with Hyperparameter Optimization)
+========================================
+
+Configuration:
+  Dictionary size: 300
+  Total duration: 60.0 s
+  Timestep: 0.05 s
+  Optimize hyperparameters: true
+  Optimization method: fmincon
+
+
+=== Bicycle Model (TRUE with Pacejka tires) Created ===
+  Mass M = 500 [kg]
+  Yaw inertia Iz = 600 [kg*m^2]
+  Pacejka params: Df=4560 N, Dr=4000 N
+======================================================
+
+
+=== Bicycle Model (Nominal) Created ===
+  Wheelbase L = 2.40 [m]
+  Mass M = 500 [kg]
+  Yaw inertia Iz = 600 [kg*m^2]
+  Understeer gradient EG = 2.01 [deg/g]
+  >> Vehicle is UNDERSTEER (stable)
+  >> Characteristic velocity v_ch = 25.9 [m/s]
+======================================
+
+Models created:
+  True: Pacejka tires (Df=4560 N, Dr=4000 N)
+  Nominal: Linear tires (Cf=35000 N/rad, Cr=35000 N/rad)
+  GP input: [vy; r; delta] (3D)
+  GP output: [ツF_y_f; ツF_y_r] (2D tire force residuals)
+
+Collecting training data...
+  [1/13] Very low speed, very tight turn
+        v=10.0 m/s, R=20.0 m, t=6.0s, r_ref=0.500 rad/s
+        Collected 120 points (avg residual: Fyf=1641.2 N, Fyr=934.6 N)
+  [2/13] Very low speed, medium turn
+        v=10.0 m/s, R=40.0 m, t=6.0s, r_ref=0.250 rad/s
+        Collected 120 points (avg residual: Fyf=798.7 N, Fyr=465.9 N)
+  [3/13] Very low speed, gentle turn
+        v=10.0 m/s, R=60.0 m, t=4.8s, r_ref=0.167 rad/s
+        Collected 96 points (avg residual: Fyf=532.4 N, Fyr=308.4 N)
+  [4/13] Low-medium speed, tight turn
+        v=12.0 m/s, R=25.0 m, t=6.0s, r_ref=0.480 rad/s
+        Collected 120 points (avg residual: Fyf=1910.0 N, Fyr=1097.5 N)
+  [5/13] Low-medium speed, medium turn
+        v=12.0 m/s, R=35.0 m, t=6.0s, r_ref=0.343 rad/s
+        Collected 120 points (avg residual: Fyf=1339.7 N, Fyr=781.4 N)
+  [6/13] Low-medium speed, gentle turn
+        v=12.0 m/s, R=50.0 m, t=4.8s, r_ref=0.240 rad/s
+        Collected 96 points (avg residual: Fyf=930.8 N, Fyr=541.9 N)
+  [7/13] Medium speed, tight turn
+        v=15.0 m/s, R=25.0 m, t=6.0s, r_ref=0.600 rad/s
+        Collected 120 points (avg residual: Fyf=3094.6 N, Fyr=1746.6 N)
+  [8/13] Medium speed, medium-tight turn
+        v=15.0 m/s, R=35.0 m, t=6.0s, r_ref=0.429 rad/s
+        Collected 120 points (avg residual: Fyf=2131.6 N, Fyr=1237.4 N)
+  [9/13] CRITICAL: Medium speed, medium turn (TEST CONDITION)
+        v=15.0 m/s, R=50.0 m, t=7.2s, r_ref=0.300 rad/s
+        Collected 144 points (avg residual: Fyf=1465.5 N, Fyr=867.6 N)
+  [10/13] Medium speed, gentle turn
+        v=15.0 m/s, R=70.0 m, t=4.8s, r_ref=0.214 rad/s
+        Collected 96 points (avg residual: Fyf=1035.6 N, Fyr=608.9 N)
+  [11/13] Medium-high speed, medium turn
+        v=17.0 m/s, R=40.0 m, t=4.8s, r_ref=0.425 rad/s
+        Collected 96 points (avg residual: Fyf=2390.4 N, Fyr=1376.9 N)
+  [12/13] Medium-high speed, gentle turn
+        v=17.0 m/s, R=55.0 m, t=4.8s, r_ref=0.309 rad/s
+        Collected 96 points (avg residual: Fyf=1703.6 N, Fyr=996.4 N)
+  [13/13] Medium-high speed, very gentle turn
+        v=17.0 m/s, R=80.0 m, t=3.6s, r_ref=0.212 rad/s
+        Collected 72 points (avg residual: Fyf=1151.2 N, Fyr=671.4 N)
+
+Total data: 1416 points
+Subsampling from 1416 to 800 points...
+  Subsampled!
+
+Data ranges:
+  vy:    [-0.719, 0.324] m/s (range: 1.044)
+  r:     [0.000, 0.474] rad/s (range: 0.474)
+  delta: [0.031, 0.343] rad (range: 0.312)
+  ツF_y_f: [-7948.9, -355.4] N (range: 7593.5)
+  ツF_y_r: [-1817.7, -0.0] N (range: 1817.7)
+
+Initializing GP with data-informed hyperparameters...
+Initial hyperparameters:
+  Length scales: [0.3479, 0.1581, 0.1039] (vy, r, delta)
+  Signal variance: [597503.02, 173353.04] (Fyf, Fyr)
+  Noise variance: [29875.15, 8667.65]
+
+Adding 800 training points to GP in 16 batches...
+{Error using chol
+Matrix must be positive definite.
+
+Error in GP/updateModel (line 146)
+                obj.L(:,:,pi) = chol(K(:,:,pi)+ obj.var_n(pi) * I ,'lower');
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error in GP/add (line 225)
+            obj.updateModel();
+            ^^^^^^^^^^^^^^^^^
+Error in pretrain_gp_bicycle (line 233)
+    d_GP.add(all_z(:, idx_start:idx_end), all_d(idx_start:idx_end, :));
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+} 
+Picked up JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
+ERROR: MATLAB error Exit Status: 0x00000001

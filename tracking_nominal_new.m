@@ -1,6 +1,6 @@
 %--------------------------------------------------------------------------
-% Simple NMPC Test for 3-State Vehicle Dynamics
-% State:  x = [V_vx; V_vy; psi_dot]
+% Simple NMPC Test for 6-State Single Track Vehicle Dynamics
+% State:  x = [I_x; I_y; psi; V_vx; V_vy; psi_dot]
 % Input:  u = [delta; T]
 %--------------------------------------------------------------------------
 
@@ -11,7 +11,7 @@ addpath(fullfile(pwd, 'Gaussian-Process-based-Model-Predictive-Control', 'classe
 addpath(fullfile(pwd, 'functions'))
 
 fprintf('\n========================================\n');
-fprintf('4-State Vehicle Dynamics NMPC Test\n');
+fprintf('6-State Single Track Vehicle Dynamics NMPC Test\n');
 fprintf('========================================\n\n');
 
 %% Simulation Parameters
@@ -22,7 +22,7 @@ maxiter = 20;       % max iterations per MPC solve
 
 %% Reference Circular Path
 % Simple circular motion: constant yaw rate for circular path
-radius = 7;        % [m] circle radius
+radius = 20;        % [m] circle radius
 v_ref = 15;         % [m/s] target velocity
 r_ref = v_ref / radius;  % [rad/s] yaw rate for circular path
 
@@ -35,17 +35,15 @@ fprintf('  Radius: %.1f m\n', radius);
 fprintf('  Velocity: %.1f m/s\n', v_ref);
 fprintf('  Yaw rate: %.3f rad/s (%.1f deg/s)\n\n', r_ref, rad2deg(r_ref));
 
-%% Define True Model
-% var_w = diag([(0.3)^2 (deg2rad(2))^2]);
-% var_w = diag([(0.3)^2 (0.3)^2 (deg2rad(2))^2]);
-nominalModel = MotionModelGP_Bicycle_nominal([], []);
+%% Define Nominal Model
+nominalModel = MotionModelGP_nominal(@(z)deal(zeros(3,1),zeros(3)), zeros(3));
 
-n = nominalModel.n;  % 4
-m = nominalModel.m;  % 1 (MotionModelGP_Bicycle_nominal has only 1 input: delta)
+n = nominalModel.n;  % 6
+m = nominalModel.m;  % 2
 
 fprintf('Nominal model created\n');
-fprintf('  States: n = %d (vx, vy, r, psi)\n', n);
-fprintf('  Inputs: m = %d (delta)\n\n', m);
+fprintf('  States: n = %d (I_x, I_y, psi, V_vx, V_vy, psi_dot)\n', n);
+fprintf('  Inputs: m = %d (delta, T)\n\n', m);
 
 %% Cost Function Weights
 weights.q_vx = 1;      % longitudinal velocity tracking
@@ -53,6 +51,7 @@ weights.q_vy = 5;       % minimize lateral velocity (stability)
 weights.q_psi = 50;      % heading angle tracking
 weights.q_r = 50;       % yaw rate tracking (path following)
 weights.q_delta = 0.1;    % steering effort
+weights.q_T = 0.01;      % torque effort
 
 %% NMPC Setup
 ne = 0;  % no extra variables
@@ -71,8 +70,8 @@ beta_max = deg2rad(12);  % max 12 deg sideslip
 g = @(x,u,e) constraintFcn(x, beta_max);
 
 % Input bounds
-u_lb = -deg2rad(30);  % delta_min
-u_ub = deg2rad(30);   % delta_max
+u_lb = [-deg2rad(30); -1];  % [delta_min; T_min]
+u_ub = [deg2rad(30); 1];    % [delta_max; T_max]
 
 % Create NMPC
 mpc = NMPC(f, h, g, u_lb, u_ub, n, m, ne, fo, fend, N, dt);
@@ -85,7 +84,7 @@ fprintf('  Max iterations: %d\n', maxiter);
 fprintf('  Sideslip limit: %.1f deg\n\n', rad2deg(beta_max));
 
 %% Initialize Simulation
-x0 = [v_ref; 0; 0; 0];  % Initial states
+x0 = [0; 0; 0; v_ref; 0; 0];  % Initial states [I_x, I_y, psi, V_vx, V_vy, psi_dot]
 
 out.t = 0:dt:tf;
 kmax = length(out.t) - 1;
@@ -96,7 +95,7 @@ out.beta = NaN(1, kmax);
 out.cost = NaN(1, kmax);
 
 fprintf('Starting simulation...\n');
-fprintf('  Initial state: [%.1f, %.1f, %.3f]\n\n', x0);
+fprintf('  Initial state: [%.1f, %.1f, %.3f, %.1f, %.1f, %.3f]\n\n', x0);
 
 %% Main Simulation Loop
 for k = 1:kmax
@@ -123,7 +122,7 @@ for k = 1:kmax
     out.x(:,k+1) = mu_xkp1;
     
     % Calculate sideslip
-    out.beta(k) = atan2(out.x(2,k), out.x(1,k));
+    out.beta(k) = atan2(out.x(5,k), out.x(4,k));
 end
 
 fprintf('\nSimulation completed!\n');
@@ -133,10 +132,10 @@ fprintf('========================================\n\n');
 k_valid = find(~isnan(out.x(1,:)), 1, 'last');
 
 % Calculate tracking errors
-% CORRECT state order: x = [vx, vy, psi, r]
-vx_error = rms(out.x(1,1:k_valid-1) - v_ref);
-psi_error = rms(out.x(3,1:k_valid-1) - psi_ref_vec(1:k_valid-1));  % psi is x(3)
-r_error = rms(out.x(4,1:k_valid-1) - r_ref);                        % r is x(4)
+% State order: x = [I_x; I_y; psi; V_vx; V_vy; psi_dot]
+vx_error = rms(out.x(4,1:k_valid-1) - v_ref);
+psi_error = rms(out.x(3,1:k_valid-1) - psi_ref_vec(1:k_valid-1));
+r_error = rms(out.x(6,1:k_valid-1) - r_ref);
 max_beta = max(abs(rad2deg(out.beta)));
 
 fprintf('Performance Metrics:\n');
@@ -150,13 +149,13 @@ figure('Name', 'NMPC Test Results', 'Color', 'w', 'Position', [100 100 1400 900]
 
 % States
 subplot(4,2,1)
-plot(out.t(1:k_valid), out.x(1,1:k_valid), 'b-', 'LineWidth', 1.5); hold on;
+plot(out.t(1:k_valid), out.x(4,1:k_valid), 'b-', 'LineWidth', 1.5); hold on;
 plot(out.t(1:k_valid), v_ref*ones(1,k_valid), 'r--', 'LineWidth', 1);
 grid on; ylabel('V_{vx} [m/s]'); title('Longitudinal Velocity');
 legend('Actual', 'Reference', 'Location', 'best');
 
 subplot(4,2,3)
-plot(out.t(1:k_valid), out.x(2,1:k_valid), 'b-', 'LineWidth', 1.5);
+plot(out.t(1:k_valid), out.x(5,1:k_valid), 'b-', 'LineWidth', 1.5);
 grid on; ylabel('V_{vy} [m/s]'); title('Lateral Velocity');
 
 subplot(4,2,5)
@@ -166,23 +165,23 @@ grid on; ylabel('\psi [deg]'); title('Heading Angle');
 legend('Actual', 'Reference', 'Location', 'best');
 
 subplot(4,2,7)
-plot(out.t(1:k_valid), rad2deg(out.x(4,1:k_valid)), 'b-', 'LineWidth', 1.5); hold on;
+plot(out.t(1:k_valid), rad2deg(out.x(6,1:k_valid)), 'b-', 'LineWidth', 1.5); hold on;
 plot(out.t(1:k_valid), rad2deg(r_ref)*ones(1,k_valid), 'r--', 'LineWidth', 1);
 grid on; ylabel('r [deg/s]'); xlabel('Time [s]'); title('Yaw Rate');
 legend('Actual', 'Reference', 'Location', 'best');
 
-% Input (only steering)
+% Inputs (steering and torque)
 subplot(4,2,2)
-stairs(out.t(1:kmax), rad2deg(out.u), 'b-', 'LineWidth', 1.5); hold on;
-yline(rad2deg(u_ub), 'r--', 'LineWidth', 1);
-yline(rad2deg(u_lb), 'r--', 'LineWidth', 1);
+stairs(out.t(1:kmax), rad2deg(out.u(1,:)), 'b-', 'LineWidth', 1.5); hold on;
+yline(rad2deg(u_ub(1)), 'r--', 'LineWidth', 1);
+yline(rad2deg(u_lb(1)), 'r--', 'LineWidth', 1);
 grid on; ylabel('\delta [deg]'); title('Steering Angle');
 legend('Command', 'Bounds', 'Location', 'best');
 
 % Tracking errors
 subplot(4,2,4)
-plot(out.t(1:k_valid-1), out.x(1,1:k_valid-1) - v_ref, 'b-', 'LineWidth', 1.5); hold on;
-plot(out.t(1:k_valid-1), rad2deg(out.x(4,1:k_valid-1) - r_ref), 'r-', 'LineWidth', 1.5);
+plot(out.t(1:k_valid-1), out.x(4,1:k_valid-1) - v_ref, 'b-', 'LineWidth', 1.5); hold on;
+plot(out.t(1:k_valid-1), rad2deg(out.x(6,1:k_valid-1) - r_ref), 'r-', 'LineWidth', 1.5);
 grid on; ylabel('Error'); title('Velocity & Yaw Rate Errors');
 legend('v_x error [m/s]', 'r error [deg/s]', 'Location', 'best');
 
@@ -199,34 +198,36 @@ yline(rad2deg(beta_max), 'r--'); yline(-rad2deg(beta_max), 'r--');
 grid on; ylabel('\beta [deg]'); xlabel('Time [s]'); title('Sideslip Angle');
 legend('Sideslip', 'Bounds', 'Location', 'best');
 
-sgtitle('4-State NMPC Test: Circular Path Tracking (with Heading Angle)');
+sgtitle('6-State Single Track NMPC Test: Circular Path Tracking');
 
 fprintf('Plots generated\n\n');
 
 %% Helper Functions
 
 function cost = costFcn(x, u, v_ref, r_ref, t, w)
-% Cost function for bicycle model (1 input: delta)
-% CRITICAL: State order is x = [vx; vy; psi; r]
-vx = x(1);
-vy = x(2);
+% Cost function for single track model (2 inputs: delta, T)
+% State order is x = [I_x; I_y; psi; vx; vy; r]
+vx = x(4);
+vy = x(5);
 psi = x(3);  % Heading angle
-r = x(4);    % Yaw rate
+r = x(6);    % Yaw rate
 delta = u(1);
+T = u(2);
 
 psi_ref_k = r_ref * t;
 
-% Full cost function - ALL TERMS NEEDED for proper tracking
+% Full cost function
 cost = w.q_vx * (vx - v_ref)^2 + ...
     w.q_vy * vy^2 + ...
     w.q_psi * (psi - psi_ref_k)^2 + ...
     w.q_r * (r - r_ref)^2 + ...
-    w.q_delta * delta^2;
+    w.q_delta * delta^2 + ...
+    w.q_T * T^2;
 end
 
 function g = constraintFcn(x, beta_max)
-vx = x(1);
-vy = x(2);
+vx = x(4);
+vy = x(5);
 beta = atan2(vy, vx);
 
 % |beta| <= beta_max

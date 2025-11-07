@@ -1,0 +1,75 @@
+executing gpml startup script...
+[Warning: Name is nonexistent or not a directory: C:\Users\user\Desktop\Matlab_ws\personal_regen\regen-braking-mpc\gpml\util\minfunc\compiled] 
+[> In path (line 109)
+In addpath>doPathAddition (line 126)
+In addpath (line 90)
+In startup (line 11)] 
+=== Testing Bicycle Models ===
+
+Creating models...
+
+=== Bicycle Model (Nominal) Created ===
+  Wheelbase L = 2.40 [m]
+  Mass M = 500 [kg]
+  Yaw inertia Iz = 600 [kg*m^2]
+  Understeer gradient EG = 2.01 [deg/g]
+  >> Vehicle is UNDERSTEER (stable)
+  >> Characteristic velocity v_ch = 25.9 [m/s]
+======================================
+
+
+=== Bicycle Model (TRUE with Pacejka tires) Created ===
+  Mass M = 500 [kg]
+  Yaw inertia Iz = 600 [kg*m^2]
+  Pacejka params: Df=4560 N, Dr=4000 N
+======================================================
+
+
+--- Test 1: Basic Dynamics Evaluation ---
+State: vx=15.0, vy=2.0, psi=0.0, r=0.30
+Input: delta=10.0 deg
+
+Nominal dynamics:
+  vx_dot  = 0.000
+  vy_dot  = -5.634
+  psi_dot = 0.300
+  r_dot   = 10.260
+
+True dynamics:
+  vx_dot  = 0.000
+  vy_dot  = -6.698
+  psi_dot = 0.300
+  r_dot   = 4.145
+
+Difference (True - Nominal):
+  ¥Ävy_dot = -1.064 m/s^2
+  ¥Är_dot  = -6.114 rad/s^2
+
+--- Test 2: Slip Angle Sweep ---
+
+--- Test 3: Matrix Dimensions Check ---
+Nominal model:
+  n=4, m=1, nz=4, nd=2
+  Bz_x: 3x4
+  Bz_u: 1x1
+  Bd: 4x2
+
+True model:
+  n=4, m=1, nz=4, nd=2
+  Bz_x: 3x4
+  Bz_u: 1x1
+  Bd: 4x2
+
+GP input z dimension:
+  Nominal: 4 (expected 4)
+  True: 4 (expected 4)
+  ? Matrix dimensions are CORRECT!
+
+--- Test 4: Time Integration Test ---
+Simulation completed.
+Final states:
+  Nominal: vx=15.00, vy=2.45, psi=269.6 deg, r=93.7 deg/s
+  True:    vx=15.00, vy=-1.24, psi=130.3 deg, r=43.9 deg/s
+
+=== All Tests Completed ===
+Picked up JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true

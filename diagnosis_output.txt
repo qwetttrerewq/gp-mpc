@@ -1,0 +1,104 @@
+executing gpml startup script...
+[Warning: Name is nonexistent or not a directory: C:\Users\user\Desktop\Matlab_ws\personal_regen\regen-braking-mpc\gpml\util\minfunc\compiled] 
+[> In path (line 109)
+In addpath>doPathAddition (line 126)
+In addpath (line 90)
+In startup (line 11)] 
+
+========================================
+Model Difference Diagnostic Analysis
+========================================
+
+
+=== Bicycle Model (Nominal) Created ===
+  Wheelbase L = 2.40 [m]
+  Mass M = 500 [kg]
+  Yaw inertia Iz = 600 [kg*m^2]
+  Understeer gradient EG = 2.01 [deg/g]
+  >> Vehicle is UNDERSTEER (stable)
+  >> Characteristic velocity v_ch = 25.9 [m/s]
+======================================
+
+
+=== Bicycle Model (TRUE with Pacejka tires) Created ===
+  Mass M = 500 [kg]
+  Yaw inertia Iz = 600 [kg*m^2]
+  Pacejka params: Df=4560 N, Dr=4000 N
+======================================================
+
+=== Test 1: Slip Angle Analysis ===
+Slip angle calculation methods:
+  Nominal: Small angle approximation
+  True:    Full atan2 calculation
+  Max difference (front): 14.1530 deg
+  Max difference (rear):  0.7162 deg
+
+=== Test 2: Tire Force Comparison ===
+Cornering stiffness comparison:
+  Nominal front: 35000 N/rad
+  Pacejka front (linear region): 14586 N/rad
+  Ratio: 41.67%
+
+  Nominal rear: 35000 N/rad
+  Pacejka rear (linear region): 14390 N/rad
+  Ratio: 41.12%
+
+=== Test 3: Dynamic Response Comparison ===
+State derivatives at steady cornering (delta=3.0 deg):
+                  Nominal      True       Diff       Ratio
+  vx_dot:         0.0000     0.0000     0.0000     0.00%
+  vy_dot:         0.6886    -5.2898    -5.9785  -768.15%
+  psi_dot:        0.2500     0.2500     0.0000   100.00%
+  r_dot:          1.3926    -0.5773    -1.9700   -41.46%
+
+=== Test 4: Gradient/Jacobian Analysis ===
+Nominal model gradx: Available (analytical)
+  Condition number: Inf
+True model gradx: RETURNS ZEROS (not implemented)
+  ??  WARNING: MPC cannot compute proper gradients!
+
+=== Test 5: Nonlinearity Analysis ===
+Tire force deviation (Pacejka vs Linear):
+  Small angles (<5 deg):  867.2 N (58.6% of linear)
+  Large angles (>10 deg): 4749.3 N (61.8% of linear)
+
+
+========================================
+ROOT CAUSE ANALYSIS SUMMARY
+========================================
+
+? KEY FINDINGS:
+
+1. GRADIENT PROBLEM:
+   ? True model returns ZERO gradients (not implemented)
+   ¡æ MPC cannot compute proper Newton-Raphson updates
+   ¡æ Optimization quality severely degraded
+
+2. CORNERING STIFFNESS MISMATCH:
+   ? Linear stiffness at small angles differs by ~58%
+   ¡æ Different steady-state response
+
+3. SLIP ANGLE CALCULATION:
+   ? Nominal: Small angle approximation
+   ? True: Full trigonometric calculation
+   ¡æ Maximum difference: ~14.15 deg
+
+4. NONLINEARITY:
+   ? Pacejka tire saturates at large slip angles
+   ? Linear model has constant gain ¡æ more aggressive control
+
+??  PRIMARY CAUSE:
+   The TRUE model has NO analytical gradients!
+   MPC relies on gradients for:
+     - Newton-Raphson optimization steps
+     - Sensitivity analysis
+     - Linearization around trajectory
+
+? SOLUTION:
+   Implement gradx_f() and gradu_f() for True model
+   OR use numerical differentiation in NMPC
+   OR accept degraded optimization performance
+
+========================================
+
+Picked up JAVA_TOOL_OPTIONS: -Djava.net.preferIPv4Stack=true
